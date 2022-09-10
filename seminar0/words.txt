@@ -1,0 +1,4 @@
+Write a program the read the content of a text file and outputs some statistics about the text inside
+the file. The program must count the number of words and calculate the average length of all the
+words in the text. The program must print the shortest and the longest word in the file. If the file is
+empty then a warning must be printed.
