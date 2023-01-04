@@ -1,171 +1,148 @@
-#include <iostream>
-#include <vector>
+#include <cassert> // assert
+#include <utility> // std::move
 
-/* Expected output:
-
-!true = false
-!(true && false) = true
-(true || false) && false && (false || !false) = false
-
- */
-
-//classes
-
-
-
-
-class Expression {
-public:
-    virtual ~Expression() = default;
-    virtual bool evaluate() = 0;
-    virtual void print(std::ostream& os) = 0;
-};
-
-void pretty_print(std::ostream& os, Expression* e);
-
-class Literal : public Expression {
-public:
-    Literal(bool value) : value{value} {}
-    bool evaluate() override {
-        return value;
-    }
-    void print(std::ostream& os) override {
-        if (value) {
-            os << "true";
-        } else {
-            os << "false";
-        }
-    }
-private:
-    bool value;
-};
-
-class Negation : public Expression {
-public:
-    Negation(Expression* expression) : expression{expression} {}
-    ~Negation() {
-        delete expression;
-    }
-    bool evaluate() override {
-        bool res = expression->evaluate();
-        return !res;
-    }
-    void print(std::ostream& os) override {
-        os << '!';
-        pretty_print(os, expression);
-    }
-private:
-    Expression* expression;
-};
-
-class Compound : public Expression {
-public:
-    Compound(std::initializer_list<Expression*> const& expressions) : 
-    expressions{expressions.begin(), expressions.end()} {}
-    ~Compound() {
-        for (Expression* e: expressions) {
-            delete e;
-        }
-    }
-
-    virtual std::string glyph() = 0;
-    void print(std::ostream& os) override {
-        for (auto it{expressions.begin()}; it != expressions.end() - 1; it++) {
-            pretty_print(os, *it);
-            os << glyph();
-        }
-        pretty_print(os, expressions.back());
-    }
-    std::vector<Expression*> expressions{};
-
-//private: // private inheritance or public? will it reach expressions with public?
+// revisit, getting segfault
+template<typename T>
+class Counted_Pointer {
     
-};
-
-class And : public Compound {
 public:
-    using Compound::Compound;
-    std::string glyph() override {
-        return "&&";
-    }
-    bool evaluate() override {
-        for (Expression* e: expressions) {
-            if (!e->evaluate()) {
-                return false;
-            }
-        }
-        return true;
-    }
-private:
-    Compound* comp;
-};
-
-class Or : public Compound {
-public:
-    using Compound::Compound;
-    std::string glyph() override {
-        return "||";
-    }
-    bool evaluate() override {
-        for (Expression* e: expressions) {
-            if (e) {
-                return true;
-            }
-        }
-        return false;
-    }
-private:
-    Compound* comp;
-};
-
-
-void pretty_print(std::ostream& os, Expression* e) {
-
-    if (dynamic_cast<Compound*>(e) != nullptr) {
-        // has compound as base
-        os << '(';
-        e->print(os);
-        os << ')';
-    } else {
-        e->print(os);
-    }
+    Counted_Pointer() = default;
+    template<typename... Ts>
+    Counted_Pointer(Ts&&... ts) : block{new Counted_Block{T {std::forward<Ts>(ts)...}, 1}} {}
     
+    Counted_Pointer(Counted_Pointer const& c) : block{c.block} {
+        if (block) {
+            block->count++;
+        }
+    }
+    Counted_Pointer(Counted_Pointer& c) : Counted_Pointer{
+        Counted_Pointer(const_cast<Counted_Pointer const&>(c))
+    } {}
+    ~Counted_Pointer() {
+        if (block) {
+            block->count--;
+        }
+        if (block->count == 0) {
+            delete block;
+        }
+    }
+    Counted_Pointer(Counted_Pointer&& c) : block{c.block} {
+        c.block = nullptr;
+    }
+    Counted_Pointer<T>& operator=(Counted_Pointer const& c) {
+        return *this = Counted_Pointer<T>{c};
+    }
+    Counted_Pointer<T>& operator=(Counted_Pointer&& c) {
+        std::swap(c.block, block);
+        return *this;
+    }
+
+    T& operator*() { return block->data; }
+    T& operator*() const { return block->data; }
+    T* operator->() { return std::addressof(block->data); }
+    T* operator->() const { return std::addressof(block->data); }
+    std::size_t count() const {
+        if (block) {
+            return block->count;
+        }
+        return 0;
+    }
+
+private:
+    struct Counted_Block {
+        T data;
+        std::size_t count;
+    };
+    Counted_Block* block{nullptr};
+
+};
+
+template<typename T, typename... Args>
+Counted_Pointer<T> make_counted(Args&&... args) {
+    return Counted_Pointer<T>(std::forward<Args>(args)...);
 }
 
 
+// Start of testcases (no modification should be needed beyond this point)
+
+struct X { int a; int b; };
+
+
+
+
+Counted_Pointer<int> test(Counted_Pointer<int> ptr)
+{
+    return ptr;
+}
+
 int main()
 {
+    // Create a counted_pointer to an X object
+    auto ptr1 = make_counted<X>(3, 5);
 
-    // Think carefully about the types here. You might have to modify
-    // the testcases slightly to make it work.
-    
-    Expression* expr1 { new Negation { new Literal { true } } };
+    // Check that the data and count is correct
+    assert(ptr1->a == 3);
+    assert(ptr1->b == 5);
+    assert(ptr1.count() == 1);
+    {
+	// Create a const copy and check that the count is increased
+	// This will call the non-const overload of the copy constructor
+        Counted_Pointer<X> const cpy1 = ptr1;
+	assert(ptr1.count() == 2);
+	assert(cpy1.count() == 2);
 
-    expr1->print(std::cout);
-    std::cout << " = " << expr1->evaluate() << std::endl;
-    
-    Expression* expr2 {
-	new Negation {
-	    new And { new Literal { true }, new Literal { false } }
+	// Check that the data is the same
+	assert(cpy1->a == 3);
+	assert(cpy1->b == 5);
+
+	// Modify the original pointer...
+	++ptr1->a;
+	++ptr1->b;
+
+	// ... and check that the change occurs in cpy1
+	assert(cpy1->a == 4);
+	assert(cpy1->b == 6);
+
+	// Make another copy to check that both copy constructors works
+	// This will call the const overload of the copy constructor
+	{
+	    auto cpy2 = cpy1;
+	    assert(ptr1.count() == 3);
+	    assert(cpy1.count() == 3);
+	    assert(cpy2.count() == 3);
 	}
-    };
 
-    expr2->print(std::cout);
-    std::cout << " = " << expr2->evaluate() << std::endl;
-    
-    Expression* expr3 {
-	new And {
-	    new Or { new Literal { true }, new Literal { false } },
-	    new Literal { false },
-	    new Or { new Literal { false }, new Negation { new Literal{false} } }
-	}
-    };
+	assert(ptr1.count() == 2);
+    }
 
-    expr3->print(std::cout);
-    std::cout << " = " << expr3->evaluate() << std::endl;
+    // Create an empty pointer
+    Counted_Pointer<X> other { };
+    assert(other.count() == 0);
+
+    // Test the move assignment
+    other = std::move(ptr1);
+    assert(ptr1.count() == 0);
+    assert(other.count() == 1);
+
+    assert(other->a == 4);
+    assert(other->b == 6);
+
+    {
+	// Test the move constructor
+	auto ptr2 = test(Counted_Pointer<int>{8});
+	assert(ptr2.count() == 1);
+	assert(*ptr2 == 8);
+	
+	// Try the const version as well
+	Counted_Pointer<int> const ptr3 = ptr2;
+	assert(ptr3.count() == 2);
+	assert(*ptr3 == 8);
+	
+	*ptr2 = 1;
+	assert(*ptr3 == 1);
+    }
     
-    
-    
-    
-    
+    // Check with the terminal command:
+    // valgrind ./a.out
+    // That no memory is leaked.
 }
