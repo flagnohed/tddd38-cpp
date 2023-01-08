@@ -1,49 +1,47 @@
 #include <iostream>
 #include <cmath> // for std::sqrt
+#include <iostream>
 #include <fstream>
 #include <vector>
-
+#include <algorithm>
+#include <iterator>
+#include <numeric>
+#include <iomanip>
+using namespace std;
+// time taken: 1h
 int main(int argc, char** argv)
 {
     if (argc < 2)
     {
-	std::cerr << "Usage: " << argv[0] << " FILE" << std::endl;
+	cerr << "Usage: " << argv[0] << " FILE" << endl;
 	return 1;
     }
 
     // filename is stored in argv[1]
 
     // implement the steps here
-
-    std::ifstream f(argv[1]);
-    if (f.is_open()) {
-        double dx;
-        f >> dx;
-        std::vector<double> values{};
-        double y;
-        while (f >> y) {
-            values.push_back(y);
-        }
-
-        std::vector<double> lengths{};
-        for (auto it = values.begin(); it < values.end() - 1; it++) {
-            auto next = std::next(it, 1);
-            double diff = *it - *next;
-            lengths.push_back(diff);
-
-        }
-        double arc_length{};
-        for (double dy : lengths) {
-            arc_length += std::sqrt(dx*dx + dy*dy);
-        }
-        std::cout << "Calculated arc length: " << arc_length << std::endl;
-
-
-
-    } else {
-        std::cerr << "File does not exist." << std::endl;
-        return 0;
+    string filename = argv[1];
+    ifstream ifs(filename);
+    if (!ifs.is_open()) {
+        cout << "Couldnt open file." << endl;
+        return 1;
     }
+    
+    double dx;
+    ifs >> dx;
+    vector<double> values{}; // y values
+    copy(istream_iterator<double>{ifs}, istream_iterator<double>{}, back_inserter(values));
+    
+    vector<double> lengths{values};
+    adjacent_difference(values.begin(), values.end(), lengths.begin());
+    
+    lengths.erase(lengths.begin()); // first element is not a difference
 
+    auto s = [dx](double dy) { return sqrt(dx*dx + dy*dy); };
+    transform(lengths.begin(), lengths.end(), lengths.begin(), s);
+    
+    double total2 = accumulate(lengths.begin(), lengths.end(), 0.0);
+
+    cout << "total length: " << total2 << endl;
 
 }

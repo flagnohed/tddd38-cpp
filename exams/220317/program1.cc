@@ -1,6 +1,49 @@
 #include <cassert>
 #include <iostream>
 
+// time taken: 0.5h
+template<typename T>
+class Function {
+
+};
+
+template<typename Ret, typename... Args>
+class Function<Ret(Args...)> {
+public:
+    template<typename T>
+    Function(T t) : storage{new Callable<T>{t}} { }
+
+    template<typename T>
+    Function& operator=(T t) {
+        storage = new Callable<T>{t};
+        return *this;
+    }
+    ~Function() = default;
+        
+
+    class Callable_Base {
+    public:
+        virtual Ret call(Args&&... args) = 0; 
+    };
+
+    template<typename T>
+    class Callable : public Callable_Base {
+    public:
+        Callable(T t) : callback{t} {}
+        Ret call(Args&&... args) override {
+            return callback(std::forward<Args>(args)...);
+        }
+    private:
+        T callback = T{};
+    };
+    Ret operator()(Args&&... args) {
+        return storage->call(std::forward<Args>(args)...);
+    }
+private:
+    Callable_Base* storage;
+    
+};
+
 void test()
 {
     std::cout << "Function call!" << std::endl;
@@ -39,56 +82,6 @@ x = 5
 11 - 5 = 6
 
 */
-
-template<typename T>
-class Function {
-
-};
-
-template<typename Ret, typename... Args>
-class Function<Ret(Args...)> {
-    public:
-    Ret operator()(Args... args){
-        return storage->call(args...);
-    }
-    Function() = default;
-
-    template<typename T>
-    Function(T&& t) : storage{new Callable<T>{std::forward<T>(t)}}{ }
-
-    ~Function() {
-        delete storage;
-    }
-
-    template<typename T>
-    Function& operator=(T&& t) {
-        
-        storage = new Callable<T>{std::forward<T>(t)};
-        return *this;
-    }
-
-    private:
-    class Callable_Base {
-        public:
-        virtual Ret call(Args... args) = 0;
-    };
-
-    template<typename T>
-    class Callable : public Callable_Base{
-        public:
-            Callable(T&& callback) : callback{std::forward<T>(callback)}{ }
-            Ret call(Args... args) override {
-                return callback(args...);
-            }
-        private:
-            T callback{};
-    };
-    
-    Callable_Base* storage;
-
-};
-
-
 
 int main()
 {
