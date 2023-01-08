@@ -46,20 +46,11 @@ int main()
     
 
 
-    // cannot get partial_sort_copy to work
     std::vector<std::pair<std::string, int>> common(3);
     
     std::partial_sort_copy(m.begin(), m.end(), 
         common.begin(), common.end(), 
             [](auto&& l, auto&& r) { return l.second > r.second; });
-    
-    // check that common is alright
-    for (auto&& p : common) {
-        std::cout << p.first << " " << p.second << std::endl;
-    }
-
-
-
 
     for (std::vector<std::string> line : lines) {
         for (std::string word : line) {
